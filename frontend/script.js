@@ -98,3 +98,26 @@ document.getElementById('telefone').addEventListener('input', function () {
   }
   this.value = v;
 });
+
+// ---- CARROSSEL ----
+const carrosselTrack = document.querySelector('.carrossel-track');
+const carrosselSlides = document.querySelectorAll('.carrossel-slide');
+const carrosselPrev = document.getElementById('carrosselPrev');
+const carrosselNext = document.getElementById('carrosselNext');
+let carrosselIndice = 0;
+
+function irParaSlideCarrossel(indice) {
+  carrosselTrack.style.transform = `translateX(-${indice * 100}%)`;
+}
+
+if (carrosselNext && carrosselPrev) {
+  carrosselNext.addEventListener('click', () => {
+    carrosselIndice = (carrosselIndice + 1) % carrosselSlides.length;
+    irParaSlideCarrossel(carrosselIndice);
+  });
+
+  carrosselPrev.addEventListener('click', () => {
+    carrosselIndice = (carrosselIndice - 1 + carrosselSlides.length) % carrosselSlides.length;
+    irParaSlideCarrossel(carrosselIndice);
+  });
+}

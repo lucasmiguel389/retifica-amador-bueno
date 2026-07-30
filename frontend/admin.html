@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Contatos Recebidos - Amador Bueno</title>
+  <style>
+    body { background: #0a0a0a; color: #f5f5f5; font-family: sans-serif; padding: 40px; }
+    h1 { color: #e85d04; }
+    table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+    th, td { text-align: left; padding: 12px; border-bottom: 1px solid #2a2a2a; }
+    th { color: #a0a0a0; text-transform: uppercase; font-size: 13px; }
+    tr:hover { background: #141414; }
+    .vazio { color: #a0a0a0; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Contatos Recebidos</h1>
+  <div id="conteudo">Carregando...</div>
+
+  <script>
+    fetch('/api/contatos')
+      .then(res => res.json())
+      .then(data => {
+        const container = document.getElementById('conteudo');
+        if (!data.contatos || data.contatos.length === 0) {
+          container.innerHTML = '<p class="vazio">Nenhum contato recebido ainda.</p>';
+          return;
+        }
+        let html = `<table>
+          <tr>
+            <th>Data</th>
+            <th>Nome</th>
+            <th>Telefone</th>
+            <th>E-mail</th>
+            <th>Serviço</th>
+            <th>Mensagem</th>
+          </tr>`;
+        data.contatos.slice().reverse().forEach(c => {
+          html += `<tr>
+            <td>${c.data}</td>
+            <td>${c.nome}</td>
+            <td>${c.telefone}</td>
+            <td>${c.email || '-'}</td>
+            <td>${c.servico}</td>
+            <td>${c.mensagem || '-'}</td>
+          </tr>`;
+        });
+        html += `</table>`;
+        container.innerHTML = html;
+      })
+      .catch(() => {
+        document.getElementById('conteudo').innerHTML = '<p class="vazio">Erro ao carregar contatos.</p>';
+      });
+  </script>
+</body>
+</html>
