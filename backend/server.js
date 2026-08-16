@@ -1,12 +1,13 @@
 // ===========================
 // RETÍFICA AMADOR BUENO
-// Back-end: Node.js + Express
+// Back-end: Node.js + Express + PostgreSQL
 // ===========================
 
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,21 +19,14 @@ app.use(express.json());
 // Servir os arquivos do front-end estáticos
 app.use(express.static(path.join(__dirname, '../frontend')));
 
-// ---- Arquivo de persistência (simples, sem banco de dados) ----
-const DB_FILE = path.join(__dirname, 'contatos.json');
-
-function lerContatos() {
-  if (!fs.existsSync(DB_FILE)) return [];
-  try {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
-  } catch {
-    return [];
-  }
-}
-
-function salvarContatos(lista) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(lista, null, 2), 'utf-8');
-}
+// ---- Conexão com o PostgreSQL ----
+const pool = new Pool({
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  database: process.env.DB_NAME,
+});
 
 // ---- Validação ----
 function validar(dados) {
@@ -48,7 +42,7 @@ function validar(dados) {
 // ============================
 
 // POST /api/contato - Recebe o formulário
-app.post('/api/contato', (req, res) => {
+app.post('/api/contato', async (req, res) => {
   const { nome, telefone, email, servico, mensagem } = req.body;
 
   const erros = validar({ nome, telefone, servico });
@@ -56,42 +50,57 @@ app.post('/api/contato', (req, res) => {
     return res.status(400).json({ error: erros.join(' ') });
   }
 
-  const novo = {
-    id: Date.now(),
-    nome: nome.trim(),
-    telefone: telefone.trim(),
-    email: (email || '').trim(),
-    servico,
-    mensagem: (mensagem || '').trim(),
-    data: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-  };
+  try {
+    const resultado = await pool.query(
+      `INSERT INTO contatos (nome, telefone, email, servico, mensagem)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [nome.trim(), telefone.trim(), (email || '').trim(), servico, (mensagem || '').trim()]
+    );
 
-  const lista = lerContatos();
-  lista.push(novo);
-  salvarContatos(lista);
+    const novo = resultado.rows[0];
+    console.log(`[CONTATO] ${novo.criado_em} — ${novo.nome} (${novo.servico})`);
 
-  console.log(`[CONTATO] ${novo.data} — ${novo.nome} (${novo.servico})`);
+    return res.status(201).json({ ok: true, message: 'Contato recebido com sucesso!' });
 
-  return res.status(201).json({ ok: true, message: 'Contato recebido com sucesso!' });
+  } catch (erro) {
+    console.error(erro);
+    return res.status(500).json({ error: 'Erro ao salvar o contato.' });
+  }
 });
 
 // GET /api/contatos - Lista todos os contatos recebidos
-app.get('/api/contatos', (req, res) => {
-  const lista = lerContatos();
-  res.json({ total: lista.length, contatos: lista });
+app.get('/api/contatos', async (req, res) => {
+  try {
+    const resultado = await pool.query(
+  `SELECT id, nome, telefone, email, servico, mensagem,
+          TO_CHAR(criado_em, 'DD/MM/YYYY HH24:MI') AS data
+   FROM contatos
+   ORDER BY criado_em DESC`
+);
+    res.json({ total: resultado.rows.length, contatos: resultado.rows });
+  } catch (erro) {
+    console.error(erro);
+    res.status(500).json({ error: 'Erro ao buscar contatos.' });
+  }
 });
 
 // DELETE /api/contatos/:id - Remove um contato pelo ID
-app.delete('/api/contatos/:id', (req, res) => {
+app.delete('/api/contatos/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  let lista = lerContatos();
-  const antes = lista.length;
-  lista = lista.filter(c => c.id !== id);
-  if (lista.length === antes) {
-    return res.status(404).json({ error: 'Contato não encontrado.' });
+
+  try {
+    const resultado = await pool.query('DELETE FROM contatos WHERE id = $1 RETURNING *', [id]);
+
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({ error: 'Contato não encontrado.' });
+    }
+
+    res.json({ ok: true, message: 'Contato removido.' });
+  } catch (erro) {
+    console.error(erro);
+    res.status(500).json({ error: 'Erro ao remover contato.' });
   }
-  salvarContatos(lista);
-  res.json({ ok: true, message: 'Contato removido.' });
 });
 
 // Fallback: retorna o index.html para qualquer rota não reconhecida
