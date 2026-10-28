@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 3000;
 
 // ---- Middlewares ----
 app.use(cors());
+app.use('/admin.html', protegerAdmin);
 app.use(express.json());
 
 // Servir os arquivos do front-end estáticos
@@ -27,6 +28,26 @@ const pool = new Pool({
   port: process.env.DB_PORT,
   database: process.env.DB_NAME,
 });
+
+// ---- Proteção por senha (área do admin) ----
+function protegerAdmin(req, res, next) {
+  const cabecalho = req.headers.authorization || '';
+  const [tipo, codigo] = cabecalho.split(' ');
+
+  if (tipo === 'Basic' && codigo) {
+    const texto = Buffer.from(codigo, 'base64').toString();
+    const separador = texto.indexOf(':');
+    const usuario = texto.slice(0, separador);
+    const senha = texto.slice(separador + 1);
+
+    if (usuario === process.env.ADMIN_USER && senha === process.env.ADMIN_PASSWORD) {
+      return next();
+    }
+  }
+
+  res.set('WWW-Authenticate', 'Basic realm="Area restrita"');
+  return res.status(401).send('Acesso restrito.');
+}
 
 // ---- Validação ----
 function validar(dados) {
@@ -70,7 +91,7 @@ app.post('/api/contato', async (req, res) => {
 });
 
 // GET /api/contatos - Lista todos os contatos recebidos
-app.get('/api/contatos', async (req, res) => {
+app.get('/api/contatos', protegerAdmin, async (req, res) => {
   try {
     const resultado = await pool.query(
   `SELECT id, nome, telefone, email, servico, mensagem,
@@ -86,7 +107,7 @@ app.get('/api/contatos', async (req, res) => {
 });
 
 // DELETE /api/contatos/:id - Remove um contato pelo ID
-app.delete('/api/contatos/:id', async (req, res) => {
+app.delete('/api/contatos/:id', protegerAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
 
   try {
@@ -113,3 +134,4 @@ app.listen(PORT, () => {
   console.log(`\n🔧 Retífica Amador Bueno — Servidor rodando!`);
   console.log(`   Acesse: http://localhost:${PORT}\n`);
 });
+
